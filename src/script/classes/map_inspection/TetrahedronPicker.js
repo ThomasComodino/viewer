@@ -30,8 +30,8 @@ export class TetrahedronPicker {
 
     if (flag) {
       // store callbacks so removeEventListener can use the same references
-      this._onClickMesh1 = (event) => picker.pickPolygon(event, 1);
-      this._onClickMesh2 = (event) => picker.pickPolygon(event, 2);
+      this._onClickMesh1 = (event) => picker.pickPolyhedron(event, 1);
+      this._onClickMesh2 = (event) => picker.pickPolyhedron(event, 2);
 
       meshRenderer1.renderer.domElement.addEventListener("click", this._onClickMesh1);
       meshRenderer2.renderer.domElement.addEventListener("click", this._onClickMesh2);
@@ -72,7 +72,7 @@ export class TetrahedronPicker {
     }
   }
 
-  pickPolygon(event, meshRendererId) {
+  pickPolyhedron(event, meshRendererId) {
     if (!event.shiftKey) return;
 
     const pickedMesh =
@@ -127,7 +127,7 @@ export class TetrahedronPicker {
         g: 1.0 - pickedPolyhedronColor.g,
         b: 1.0 - pickedPolyhedronColor.b,
       };
-      // Color the picked polygon with the complementary color
+      // Color the picked polyhedron with the complementary color
       this._colorPolyhedron(pickedMesh, pickedPolyhedron, colorRGB);
       this._colorPolyhedron(otherVolumeMesh.mesh, pickedPolyhedron, colorRGB);
 

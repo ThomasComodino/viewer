@@ -2,6 +2,7 @@ import * as THREE from "../../../libs/three/three.module.js";
 import * as utils from "../../main/utils.js";
 import { MeshController } from "../controllers/MeshController.js";
 import { MeshLoader } from "../loaders/MeshLoader.js";
+import { TetrahedronDigger } from "../map_inspection/TetrahedronDigger.js";
 import { MeshRenderer } from "../mesh_inspection/MeshRenderer.js";
 import { MeshSlicer } from "../mesh_inspection/MeshSlicer.js";
 
@@ -46,6 +47,7 @@ export class VolumeMesh {
     this.controller = new MeshController(this, settingsContainer, canvasContainer);
     this.meshRenderer = new MeshRenderer(this, canvasContainer);
     this.meshSlicer = new MeshSlicer(this);
+    this.digger = new TetrahedronDigger(this)
   }
 
   setMesh(mesh) {
@@ -54,9 +56,10 @@ export class VolumeMesh {
     // Translate mesh to origin and compute bounding box
     this.translateToOrigin();
     this.setBoundingBox();
+
     //Reset wireframe and generate surface mesh and wireframe
     this.setWireframe();
-    this.updateVisibleFaces(false, false);
+    this.updateVisibleFaces(false, false, false);
     // Generate shell from the surface mesh
     this.setShell();
     //RenderOrder to avoid z-fighting when rendering in external to internal order
@@ -70,6 +73,7 @@ export class VolumeMesh {
     //Update the renderer with the new mesh and reset it
     this.meshRenderer.updateMesh();
     this.controller.resetRendering();
+
     //Reset the scene to default rendering objects and colors
     this.resetRendering();
     if (this.meshSlicer.isActive) {
@@ -77,6 +81,13 @@ export class VolumeMesh {
       this.toggleSlicingPlane(true, 1);
       this.toggleSlicingPlane(true, 2);
     }
+
+    this.digger.updateMesh();
+
+    if (!this.digger.isActive) {
+      this.digger.setActive(true);
+    }
+
   }
 
   setShell() {
@@ -136,7 +147,7 @@ export class VolumeMesh {
     this.mesh.geometry.setAttribute("position", positionAttribute);
   }
 
-  updateVisibleFaces(isSlicerActive, isDistortionSlicerActive) {
+  updateVisibleFaces(isSlicerActive, isDistortionSlicerActive, isDiggerActive) {
     const adjacencyMap = this.mesh.geometry.userData.adjacencyMap;
     const vertices = this.mesh.geometry.userData.vertices;
     //Mesh attributes
@@ -156,11 +167,13 @@ export class VolumeMesh {
         const isVisible1 =
           (!isSlicerActive || this.meshSlicer.isPolyVisible(value[0].polyIndex)) &&
           (!isDistortionSlicerActive ||
-            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[0].polyIndex));
+            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[0].polyIndex)) &&
+          (!isDiggerActive || this.digger.isPolyVisible(value[0].polyIndex));
         const isVisible2 =
           (!isSlicerActive || this.meshSlicer.isPolyVisible(value[1].polyIndex)) &&
           (!isDistortionSlicerActive ||
-            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[1].polyIndex));
+            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[1].polyIndex)) &&
+          (!isDiggerActive || this.digger.isPolyVisible(value[1].polyIndex));
         //If only one of the two is visible, add the face to the triangle soup
         if (isVisible1 !== isVisible2) {
           sortedFace = isVisible1 ? value[0].sortedFace : value[1].sortedFace;
@@ -171,7 +184,8 @@ export class VolumeMesh {
         const isVisible =
           (!isSlicerActive || this.meshSlicer.isPolyVisible(value[0].polyIndex)) &&
           (!isDistortionSlicerActive ||
-            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[0].polyIndex));
+            this.volumeMap.distortionSlicer.isPolyVisibleByDistortion(value[0].polyIndex)) &&
+          (!isDiggerActive || this.digger.isPolyVisible(value[0].polyIndex))
         //If it's visible, add the face to the triangle soup
         if (isVisible) {
           sortedFace = value[0].sortedFace;
@@ -357,7 +371,7 @@ export class VolumeMesh {
     if (!flag) {
       this.meshSlicer.resetSlicer();
       this.controller.resetSlicer();
-      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive);
+      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive, this.digger.isActive);
     }
 
     return true;
@@ -377,7 +391,7 @@ export class VolumeMesh {
     const result = this.meshSlicer.slice(sliderValue, axisIndex);
 
     if (result) {
-      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive);
+      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive, this.digger.isActive);
     }
 
     return result;
@@ -414,7 +428,7 @@ export class VolumeMesh {
     const result = this.meshSlicer.reverseSlicingDirection(flag, axisIndex);
 
     if (result) {
-      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive);
+      this.updateVisibleFaces(this.meshSlicer.isActive, this.volumeMap.distortionSlicer.isActive, this.digger.isActive);
     }
 
     return result;
@@ -434,10 +448,19 @@ export class VolumeMesh {
     const result = this.meshSlicer.pickerSlice(pickedPolyhedron);
 
     if (result) {
-      this.updateVisibleFaces(true, this.volumeMap.distortionSlicer.isActive);
+      this.updateVisibleFaces(true, this.volumeMap.distortionSlicer.isActive, this.digger.isActive);
     }
 
     return result;
+  }
+
+  setDiggerMode(mode) {
+    if (!this.mesh) {
+      console.warn("Mesh not loaded yet");
+      return false;
+    }
+    this.digger.setMode(mode);
+    return true;
   }
 
   resetRendering() {
