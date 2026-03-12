@@ -7,6 +7,8 @@ export class TetrahedronPicker {
   lastPickedPolyhedronIndex = null;
   lastPickedPolyhedronColor = null;
 
+  isPicking = false;
+
   volumeMap = null;
 
   raycaster = null;
@@ -50,10 +52,14 @@ export class TetrahedronPicker {
   }
 
   updateColor() {
+    const faceKeys = this.volumeMap.volumeMesh1.mesh.geometry.userData.faceKeys;
+    const adjacencyMap = this.volumeMap.volumeMesh1.mesh.geometry.userData.adjacencyMap;
     const polyColor = this.volumeMap.volumeMesh1.mesh.geometry.userData.polyColor;
 
     if (this.lastPickedPolyhedronIndex !== null && this.lastPickedPolyhedronColor !== null) {
-      this.lastPickedPolyhedronColor = polyColor[this.lastPickedPolyhedronIndex];
+      const key = faceKeys[this.lastPickedPolyhedronIndex];
+      const value = adjacencyMap.get(key);
+      this.lastPickedPolyhedronColor = polyColor[value[0].polyIndex];
       const colorRGB = {
         r: 1.0 - this.lastPickedPolyhedronColor.r,
         g: 1.0 - this.lastPickedPolyhedronColor.g,
@@ -75,6 +81,7 @@ export class TetrahedronPicker {
   pickPolyhedron(event, meshRendererId) {
     if (!event.shiftKey) return;
 
+
     const pickedMesh =
       meshRendererId === 1 ? this.volumeMap.volumeMesh1.mesh : this.volumeMap.volumeMesh2.mesh;
     const otherVolumeMesh =
@@ -93,17 +100,25 @@ export class TetrahedronPicker {
 
     // If a polyhedron is picked, color it and store its color
     if (intersects.length > 0) {
-      const polyIndex = pickedMesh.geometry.getAttribute("polyIndex");
+      const faceKeys = pickedMesh.geometry.userData.faceKeys;
+      const adjacencyMap = pickedMesh.geometry.userData.adjacencyMap;
       const polyColor = pickedMesh.geometry.userData.polyColor;
       const polyDistortion = pickedMesh.geometry.userData.polyDistortion;
 
       const faceIndex = intersects[0].face.a / 3;
-      const pickedPolyhedron = polyIndex.array[faceIndex];
+      const key = faceKeys[faceIndex];
+      const value = adjacencyMap.get(key);
+      const pickedPolyhedron = value[0].polyIndex;
       const pickedPolyhedronColor = polyColor[pickedPolyhedron];
       const pickedPolyhedronDistortion = polyDistortion[pickedPolyhedron];
+      const isPolyInternal = value.length === 2;
 
       // If exists, retrieve the last picked polyhedron and restore its color
       if (this.lastPickedPolyhedronIndex !== null && this.lastPickedPolyhedronColor !== null) {
+        if (this.lastPickedPolyhedronIndex === pickedPolyhedron) {
+          // If the same polyhedron is picked again, just do nothing (keep it highlighted)
+          return;
+        }
         this._colorPolyhedron(
           pickedMesh,
           this.lastPickedPolyhedronIndex,
@@ -115,8 +130,10 @@ export class TetrahedronPicker {
           this.lastPickedPolyhedronColor
         );
       }
+      if (isPolyInternal) {
+        otherVolumeMesh.pickerSlice(pickedPolyhedron);
+      }
 
-      otherVolumeMesh.pickerSlice(pickedPolyhedron);
 
       // Store the color of the picked polygon
       this.lastPickedPolyhedronIndex = pickedPolyhedron;
@@ -127,30 +144,50 @@ export class TetrahedronPicker {
         g: 1.0 - pickedPolyhedronColor.g,
         b: 1.0 - pickedPolyhedronColor.b,
       };
-      // Color the picked polyhedron with the complementary color
+      // Color the picked polygon with the complementary color
       this._colorPolyhedron(pickedMesh, pickedPolyhedron, colorRGB);
       this._colorPolyhedron(otherVolumeMesh.mesh, pickedPolyhedron, colorRGB);
+
+      const otherFaceKeys = otherVolumeMesh.mesh.geometry.userData.faceKeys;
+      const otherAdjacencyMap = otherVolumeMesh.mesh.geometry.userData.adjacencyMap;
+
+      let otherFaceIndex = 0;
+
+      for (let i = 0; i < otherFaceKeys.length; i++) {
+        const value = otherAdjacencyMap.get(otherFaceKeys[i]);
+        
+        if (value[0].polyIndex === pickedPolyhedron || (value.length === 2 && value[1].polyIndex === pickedPolyhedron)) {
+          otherFaceIndex = i;
+          break;
+        }
+      }
+
+      otherVolumeMesh.meshRenderer.focusCameraOnPolyhedron(otherFaceIndex, otherVolumeMesh.mesh.geometry);
 
       this.volumeMap.controller.updatePickerInfo(pickedPolyhedron, pickedPolyhedronDistortion);
     } else {
       this.resetPicker();
     }
+
   }
 
   _colorPolyhedron(mesh, polyhedron, colorRGB) {
-    const polyIndex = mesh.geometry.getAttribute("polyIndex");
+    const faceKeys = mesh.geometry.userData.faceKeys;
+    const adjacencyMap = mesh.geometry.userData.adjacencyMap;
     const color = mesh.geometry.getAttribute("color");
     const polyColor = mesh.geometry.userData.polyColor;
 
-    for (let i = 0; i < polyIndex.array.length; i++) {
-      if (polyIndex.array[i] === polyhedron) {
+    for (let i = 0; i < faceKeys.length; i++) {
+      const value = adjacencyMap.get(faceKeys[i]);
+      if (value[0].polyIndex === polyhedron ||
+        (value.length == 2 && value[1].polyIndex === polyhedron)) {
         // Retrieve the starting index of the face in the color attribute
-        const faceIndex = i * 9;
+        const colorOffset = i * 9;
         // Update the color for the three vertices of the face
         for (let j = 0; j < 3; j++) {
-          color.array[faceIndex + j * 3] = colorRGB.r;
-          color.array[faceIndex + j * 3 + 1] = colorRGB.g;
-          color.array[faceIndex + j * 3 + 2] = colorRGB.b;
+          color.array[colorOffset + j * 3] = colorRGB.r;
+          color.array[colorOffset + j * 3 + 1] = colorRGB.g;
+          color.array[colorOffset + j * 3 + 2] = colorRGB.b;
         }
         // Update the stored color of the polyhedron
         polyColor[polyhedron] = colorRGB;

@@ -32,6 +32,7 @@ export class MeshController {
   diggerModeInputs = null;
   resetDiggerButton = null;
   diggerLinkToggle = null;
+  pickerDebugNormalToggle = null;
 
   constructor(volumeMesh, settingsContainer, canvasContainer) {
     this.volumeMesh = volumeMesh;
@@ -67,6 +68,7 @@ export class MeshController {
     this.diggerModeInputs = settingsContainer.getElementsByClassName("digger-mode");
     this.resetDiggerButton = getElement(settingsContainer, "reset-digger");
     this.diggerLinkToggle = getElement(settingsContainer, "digger-link-toggle");
+    this.pickerDebugNormalToggle = getElement(settingsContainer, "picker-debug-normal-toggle");
 
     this.appendEventListeners(this.volumeMesh);
   }
@@ -271,6 +273,11 @@ export class MeshController {
       const flag = this.checked;
       volumeMesh.digger.setLinkActive(flag);
     };
+    this.pickerDebugNormalToggle.onchange = function () {
+      const flag = this.checked;
+      volumeMesh.volumeMap.volumeMesh1.meshRenderer.toggleDebug(flag);
+      volumeMesh.volumeMap.volumeMesh2.meshRenderer.toggleDebug(flag);
+    };
 
     //Update renderer size on window resize
     window.addEventListener("resize", () => {
@@ -316,5 +323,6 @@ export class MeshController {
     this.axisToggle.checked = false;
     this.orbitalToggle.checked = false;
     this.diggerModeInputs[0].checked = true;
+    this.pickerDebugNormalToggle.checked = false;
   }
 }

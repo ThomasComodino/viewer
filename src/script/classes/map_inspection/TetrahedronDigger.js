@@ -77,51 +77,24 @@ export class TetrahedronDigger {
     const intersects = this.raycaster.intersectObject(pickedMesh, true);
 
     if (intersects.length > 0) {
-      const polyIndex = pickedMesh.geometry.getAttribute("polyIndex");
+      const faceKeys = pickedMesh.geometry.userData.faceKeys;
+      const adjacencyMap = pickedMesh.geometry.userData.adjacencyMap;
 
       const faceIndex = intersects[0].face.a / 3;
-      const pickedPolyhedron = polyIndex.array[faceIndex];
+      const key = faceKeys[faceIndex];
+      const value = adjacencyMap.get(key);
+      let pickedPolyhedron;
+      if (value.length == 2) {
+        pickedPolyhedron = this.polyVisibility[value[0].polyIndex] ? value[0].polyIndex : value[1].polyIndex;
+      } else {
+        pickedPolyhedron = value[0].polyIndex;
+      }
 
       // If exists, retrieve the last picked polyhedron and restore its color
       if (this.mode === "digger") {
         this.polyVisibility[pickedPolyhedron] = false;
       } else if (this.mode === "undigger") {
-        const adjacencyMap = this.volumeMesh.mesh.geometry.userData.adjacencyMap;
-        const vertices = this.volumeMesh.mesh.geometry.userData.vertices;
-
-
-        const face = intersects[0].face;
-
-        const position = pickedMesh.geometry.getAttribute("position");
-
-        const vertexA  = new THREE.Vector3().fromBufferAttribute(position, face.a);
-        const vertexB  = new THREE.Vector3().fromBufferAttribute(position, face.b);
-        const vertexC  = new THREE.Vector3().fromBufferAttribute(position, face.c);
-
-
-        function findVertexIndex(vertex, vertices) {
-          for (let i = 0; i < vertices.length / 3; i++) {
-            if (
-              /*vertices[i * 3] === vertex.x && vertices[i * 3 + 1] === vertex.y && vertices[i * 3 + 2] === vertex.z*/
-
-              Math.abs(vertices[i * 3] - vertex.x) < 1e-6 &&
-              Math.abs(vertices[i * 3 + 1] - vertex.y) < 1e-6 &&
-              Math.abs(vertices[i * 3 + 2] - vertex.z) < 1e-6
-            ) {
-              return i;
-            }
-          }
-          return -1;
-        }
-
-        const indexA = findVertexIndex(vertexA, vertices);
-        const indexB = findVertexIndex(vertexB, vertices);
-        const indexC = findVertexIndex(vertexC, vertices);
-
-        const key = [indexA, indexB, indexC].sort((a, b) => a - b).join(",");
-        const value = adjacencyMap.get(key);
-
-        if (value && value.length == 2) {
+        if (value.length == 2) {
           const poly1 = value[0].polyIndex;
           const poly2 = value[1].polyIndex;
 
@@ -164,13 +137,6 @@ export class TetrahedronDigger {
 
   setMode(mode) {
     this.mode = mode;
-
-    /*const volumeMap = this.volumeMesh.volumeMap;
-    if (!volumeMap) return;
-
-    const otherVolumeMesh = volumeMap.volumeMesh1 === this.volumeMesh ? volumeMap.volumeMesh2 : volumeMap.volumeMesh1;
-
-    otherVolumeMesh.digger.mode = mode;*/
   }
 
   isolate(pickedPolyhedron) {

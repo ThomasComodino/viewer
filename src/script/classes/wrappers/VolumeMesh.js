@@ -152,7 +152,7 @@ export class VolumeMesh {
     const vertices = this.mesh.geometry.userData.vertices;
     //Mesh attributes
     var tmpTriangleSoup = new Array();
-    var tmpPoly = new Array();
+    var tmpFaces = new Array();
     //Wireframe attributes
     var tmpSegments = new Array();
 
@@ -207,7 +207,7 @@ export class VolumeMesh {
           tmpTriangleSoup.push(vertices[v * 3 + 2]);
         }
         // Push polyhedron index
-        tmpPoly.push(polyIndex);
+        tmpFaces.push(key);
         // Push wireframe segments (for each face, create its 3 edges)
         tmpSegments.push(sortedFace[0], sortedFace[1]);
         tmpSegments.push(sortedFace[1], sortedFace[2]);
@@ -217,9 +217,9 @@ export class VolumeMesh {
     //Update mesh geometry
     const positionsAttribute = new THREE.BufferAttribute(new Float32Array(tmpTriangleSoup), 3);
     this.mesh.geometry.setAttribute("position", positionsAttribute);
-    const polyAttribute = new THREE.BufferAttribute(new Uint32Array(tmpPoly), 1);
-    this.mesh.geometry.setAttribute("polyIndex", polyAttribute);
+    this.mesh.geometry.userData.faceKeys = tmpFaces;
     //Compute normals for proper lighting
+    this.mesh.geometry.deleteAttribute("normal");
     this.mesh.geometry.computeVertexNormals();
     this.mesh.geometry.needsUpdate = true;
     //Update wireframe geometry
@@ -233,20 +233,23 @@ export class VolumeMesh {
   }
 
   updateVisibleFacesColor() {
-    const polyIndex = this.mesh.geometry.getAttribute("polyIndex");
+    const adjacencyMap = this.mesh.geometry.userData.adjacencyMap;
+    const faceKeys = this.mesh.geometry.userData.faceKeys;
     const polyColor = this.mesh.geometry.userData.polyColor;
     var tmpColor = new Array();
 
-    for (let i = 0; i < polyIndex.count; i++) {
-      const pIndex = polyIndex.array[i];
-      if (polyColor) {
-        const color = polyColor[pIndex];
-        //One color per vertex
-        for (let j = 0; j < 3; j++) {
-          tmpColor.push(color.r, color.g, color.b);
-        }
+    for (let i = 0; i < faceKeys.length; i++) {
+      const key = faceKeys[i];
+      const value = adjacencyMap.get(key);
+      const polyIndex = value[0].polyIndex;
+      const color = polyColor[polyIndex];
+
+      //One color per vertex
+      for (let j = 0; j < 3; j++) {
+        tmpColor.push(color.r, color.g, color.b);
       }
     }
+
 
     const colorAttribute = new THREE.BufferAttribute(new Float32Array(tmpColor), 3);
     this.mesh.geometry.setAttribute("color", colorAttribute);

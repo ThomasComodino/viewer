@@ -27,6 +27,9 @@ export class MeshRenderer {
 
   volumeMesh = null;
 
+  debugEnabled = false;
+  debugObjects = [];
+
   constructor(volumeMesh, canvasContainer) {
     this.volumeMesh = volumeMesh;
     this.canvasContainer = canvasContainer;
@@ -176,6 +179,72 @@ export class MeshRenderer {
     this.axis.scale.set(this.controls._tbRadius, this.controls._tbRadius, this.controls._tbRadius);
   }
 
+  focusCameraOnPolyhedron(faceIndex, otherGeometry) {
+    const positionAttr = otherGeometry.getAttribute("position");
+    const normalAttr = otherGeometry.getAttribute("normal");
+
+    const vA = new THREE.Vector3(positionAttr.getX(faceIndex * 3), positionAttr.getY(faceIndex * 3), positionAttr.getZ(faceIndex * 3));
+    const vB = new THREE.Vector3(positionAttr.getX(faceIndex * 3 + 1), positionAttr.getY(faceIndex * 3 + 1), positionAttr.getZ(faceIndex * 3 + 1));
+    const vC = new THREE.Vector3(positionAttr.getX(faceIndex * 3 + 2), positionAttr.getY(faceIndex * 3 + 2), positionAttr.getZ(faceIndex * 3 + 2));
+
+    const centroid = new THREE.Vector3().add(vA).add(vB).add(vC).divideScalar(3);
+
+    const nA = new THREE.Vector3(normalAttr.getX(faceIndex * 3), normalAttr.getY(faceIndex * 3), normalAttr.getZ(faceIndex * 3));
+    const nB = new THREE.Vector3(normalAttr.getX(faceIndex * 3 + 1), normalAttr.getY(faceIndex * 3 + 1), normalAttr.getZ(faceIndex * 3 + 1));
+    const nC = new THREE.Vector3(normalAttr.getX(faceIndex * 3 + 2), normalAttr.getY(faceIndex * 3 + 2), normalAttr.getZ(faceIndex * 3 + 2));
+
+    const normal = new THREE.Vector3().add(nA).add(nB).add(nC).divideScalar(3).normalize().negate();
+
+    otherGeometry.computeBoundingBox();
+    const size = otherGeometry.boundingBox.getSize(new THREE.Vector3());
+
+    if (this.debugEnabled) this.drawDebugForFace(vA, vB, vC, centroid, normal, size);
+
+    const offset = size.length();
+    const newCameraPos = centroid.clone().addScaledVector(normal, offset);
+
+    this.camera.position.copy(newCameraPos);
+    this.camera.lookAt(centroid);
+    this.controls.update();
+    this.updateLightAndAxis();
+    this.camera.updateProjectionMatrix();
+  }
+
+  drawDebugForFace(vA, vB, vC, centroid, normal, size) {
+    this.debugObjects.forEach(obj => this.scene.remove(obj));
+    this.debugObjects = [];
+
+    const arrowLength = size.length() * 0.2;
+    const sphereRadius = size.length() * 0.002;
+    const sphereGeo = new THREE.SphereGeometry(sphereRadius);
+
+    const normalArrow = new THREE.ArrowHelper(normal, centroid, arrowLength, 0xff0000);
+    this.scene.add(normalArrow);
+    this.debugObjects.push(normalArrow);
+
+    [vA, vB, vC].forEach((v, i) => {
+      const colors = [0x00ff00, 0x0000ff, 0xffff00];
+      const sphere = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: colors[i] }));
+      sphere.position.copy(v);
+      this.scene.add(sphere);
+      this.debugObjects.push(sphere);
+    });
+
+    const centroidSphere = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+    centroidSphere.position.copy(centroid);
+    this.scene.add(centroidSphere);
+    this.debugObjects.push(centroidSphere);
+  }
+
+  ///DEBUG
+  toggleDebug(flag) {
+    this.debugEnabled = flag;
+    if (!flag) {
+      this.debugObjects.forEach(obj => this.scene.remove(obj));
+      this.debugObjects = [];
+    }
+  }
+
   toggleAxis(flag) {
     if (flag) {
       this.axisScene.remove(this.axis);
@@ -237,6 +306,9 @@ export class MeshRenderer {
     this.updateLightAndAxis();
 
     this.camera.updateProjectionMatrix();
+
+    this.debugObjects.forEach(obj => this.scene.remove(obj));
+    this.debugObjects = [];
   }
 
   resize() {
@@ -266,4 +338,8 @@ export class MeshRenderer {
     this.camera.aspect = aspect();
     this.camera.updateProjectionMatrix();
   }
+
+
 }
+
+

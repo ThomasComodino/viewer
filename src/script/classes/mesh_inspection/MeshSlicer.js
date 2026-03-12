@@ -4,6 +4,7 @@ import * as utils from "../../main/utils.js";
 const minSliderValue = -100;
 const maxSliderValue = 100;
 
+
 function AxisData() {
   return {
     plane: null,
@@ -252,8 +253,16 @@ export class MeshSlicer {
     }
 
     //Update sliderValue based on the picked polyhedra
-    const polyhedronCentroid =
-      this.volumeMesh.mesh.geometry.userData.polyCentroids[pickedPolyhedron * 3];
+    const polyhedronCentroid = this.volumeMesh.mesh.geometry.userData.polyCentroids[pickedPolyhedron * 3];
+    const box = this.volumeMesh.mesh.geometry.boundingBox;
+    const meshCenter = box.getCenter(new THREE.Vector3());
+    const shouldReverse = polyhedronCentroid < meshCenter.x;
+
+
+    if (this.x.isReversed !== shouldReverse) {
+      this.reverseSlicingDirection(shouldReverse, 0);
+    }
+
     const maxPlanePosition = this.x.plane.geometry.userData.resetPosition;
 
     const sliderValue = polyhedronCentroid * (maxSliderValue / maxPlanePosition);
